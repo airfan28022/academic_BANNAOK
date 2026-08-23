@@ -1,8 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { User, SchoolConfig } from '../types';
-import { showSuccessAlert, showErrorAlert, showConfirmDialog, showToast } from '../utils/alerts';
+import { showSuccessAlert, showErrorAlert, showWarningAlert, showConfirmDialog, showToast } from '../utils/alerts';
 import { readFileAsDataURL, formatThaiDate } from '../utils/storage';
-import { getDriveFolderUrl, GOOGLE_DRIVE_CONFIG } from '../utils/googleDrive';
+import {
+  getDriveFolderUrl,
+  GOOGLE_DRIVE_CONFIG,
+  getStoredScriptUrl,
+  saveScriptUrl,
+  GOOGLE_APPS_SCRIPT_CODE,
+} from '../utils/googleDrive';
 import {
   Settings,
   User as UserIcon,
@@ -23,6 +29,9 @@ import {
   Database,
   Copy,
   Check,
+  Code,
+  Sparkles,
+  Link,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -55,12 +64,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isAdmin = currentUser.role === 'admin';
   const [activeTab, setActiveTab] = useState<'profile' | 'members' | 'cloud' | 'password'>('profile');
   const [copiedDriveId, setCopiedDriveId] = useState(false);
+  const [copiedGasCode, setCopiedGasCode] = useState(false);
+  const [gasUrlInput, setGasUrlInput] = useState(getStoredScriptUrl());
+  const [isTestingGas, setIsTestingGas] = useState(false);
+  const [gasStatusMsg, setGasStatusMsg] = useState<string | null>(null);
 
   const handleCopyDriveId = () => {
     navigator.clipboard.writeText(GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
     setCopiedDriveId(true);
     showToast('success', 'คัดลอก Folder ID สำเร็จ');
     setTimeout(() => setCopiedDriveId(false), 2000);
+  };
+
+  const handleCopyGasCode = () => {
+    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
+    setCopiedGasCode(true);
+    showToast('success', 'คัดลอกโค้ด Google Apps Script แล้ว! นำไปวางใน script.google.com ได้ทันที');
+    setTimeout(() => setCopiedGasCode(false), 2500);
+  };
+
+  const handleSaveGasUrl = () => {
+    saveScriptUrl(gasUrlInput);
+    showToast('success', 'บันทึก URL สะพานเชื่อมต่อ Google Drive แล้ว');
+  };
+
+  const handleTestGasConnection = async () => {
+    if (!gasUrlInput.trim()) {
+      showWarningAlert('ยังไม่ได้ใส่ URL', 'กรุณาใส่ Web App URL ของ Google Apps Script ก่อนทดสอบ');
+      return;
+    }
+    setIsTestingGas(true);
+    setGasStatusMsg(null);
+    try {
+      const res = await fetch(gasUrlInput.trim());
+      const data = await res.json();
+      if (data.status === 'success') {
+        saveScriptUrl(gasUrlInput);
+        setGasStatusMsg('เชื่อมต่อสำเร็จ! Google Drive พร้อมรับไฟล์แล้ว');
+        showSuccessAlert('เชื่อมต่อสำเร็จ!', 'ระบบทดสอบส่งข้อมูลไปยัง Google Apps Script เรียบร้อย ไฟล์จะถูกส่งเข้า Drive โดยอัตโนมัติ');
+      } else {
+        setGasStatusMsg('การตอบรับไม่สมบูรณ์: ' + (data.message || 'Error'));
+      }
+    } catch (err: any) {
+      setGasStatusMsg('เชื่อมต่อไม่สำเร็จ ตรวจสอบว่าเลือก "Who has access: Anyone" ตอน Deploy หรือยัง');
+      showErrorAlert('ทดสอบไม่สำเร็จ', 'ไม่สามารถเชื่อมต่อได้ กรุณาตรวจสอบว่าตั้งค่า New Deployment เป็น Web app และเลือก Anyone (ทุกคน) หรือยัง');
+    } finally {
+      setIsTestingGas(false);
+    }
   };
 
   // Profile Form States
@@ -554,8 +604,80 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {activeTab === 'cloud' && (
           <div className="space-y-5 py-2">
             
+            {/* Google Apps Script (GAS) Web App - The Ultimate Bridge for direct Google Drive upload */}
+            <div className="p-4 bg-gradient-to-br from-purple-50 via-indigo-50/50 to-white border border-purple-200/80 rounded-2xl space-y-3.5 shadow-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white shadow-xs flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      สะพานเชื่อมต่อ Google Apps Script (แนะนำสูงสุด)
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">ส่งไฟล์ตรง 100%</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500">ช่วยให้อัปโหลดไฟล์และสร้างโฟลเดอร์ลง Google Drive ได้ทันทีโดยผู้ใช้ไม่ต้องล็อกอิน Google ซ้ำ</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyGasCode}
+                  className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs flex items-center gap-1.5 transition-all flex-shrink-0"
+                >
+                  {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Code className="w-3.5 h-3.5" />}
+                  <span>{copiedGasCode ? 'คัดลอกโค้ดแล้ว!' : 'คัดลอกโค้ด (.gs)'}</span>
+                </button>
+              </div>
+
+              {/* GAS Web App URL input */}
+              <div className="space-y-1.5 bg-white p-3 rounded-xl border border-purple-100">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  Google Apps Script Web App URL (ที่ได้จากการ Deploy)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={gasUrlInput}
+                    onChange={(e) => setGasUrlInput(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
+                    className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono text-purple-900 placeholder:text-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestGasConnection}
+                    disabled={isTestingGas}
+                    className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1 transition-all"
+                  >
+                    {isTestingGas ? 'กำลังทดสอบ...' : 'ทดสอบ & บันทึก'}
+                  </button>
+                </div>
+                {gasStatusMsg && (
+                  <p className={`text-[11px] font-medium ${gasStatusMsg.includes('สำเร็จ') ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {gasStatusMsg}
+                  </p>
+                )}
+              </div>
+
+              {/* Steps to deploy GAS */}
+              <div className="bg-white/80 p-3 rounded-xl border border-purple-100/70 text-[11px] text-slate-600 space-y-1.5">
+                <div className="font-bold text-purple-950 flex items-center gap-1">
+                  <span>📌 วิธีนำโค้ดไปวางใน Google Apps Script (ทำครั้งเดียว):</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 pl-1 text-slate-600">
+                  <li>กดปุ่ม <strong>"คัดลอกโค้ด (.gs)"</strong> ด้านบน แล้วเปิดเว็บ <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-purple-600 underline font-bold inline-flex items-center gap-0.5">script.google.com <ExternalLink className="w-2.5 h-2.5" /></a></li>
+                  <li>กด <strong>New Project (โครงการใหม่)</strong> $\rightarrow$ วางโค้ดที่คัดลอกลงไปทั้งหมด $\rightarrow$ กดบันทึก (Ctrl+S)</li>
+                  <li>กด <strong>Deploy (การทำให้ใช้งานได้)</strong> $\rightarrow$ <strong>New deployment</strong> $\rightarrow$ เลือกประเภท <strong>Web app</strong>:<br/>
+                    &bull; <em>Execute as</em>: เลือก <strong>Me (ฉัน)</strong><br/>
+                    &bull; <em>Who has access</em>: เลือก <strong>Anyone (ทุกคน)</strong><br/>
+                  </li>
+                  <li>กด Deploy แล้วคัดลอก <strong>Web app URL</strong> มาวางในช่องด้านบนนี้แล้วกด "ทดสอบ & บันทึก"</li>
+                </ol>
+              </div>
+            </div>
+
             {/* Google Drive Status Box */}
-            <div className="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl">
+            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-white text-amber-500 shadow-xs flex items-center justify-center flex-shrink-0">
@@ -569,7 +691,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-slate-900">Google Drive Folder ID ที่เชื่อมต่อ</h3>
+                    <h3 className="text-xs font-bold text-slate-900">Google Drive Folder ID ปลายทาง</h3>
                     <p className="text-[11px] text-slate-500">โฟลเดอร์หลักสำหรับจัดเก็บไฟล์ที่ส่งและเอกสารทั้งหมด</p>
                   </div>
                 </div>
@@ -603,37 +725,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl space-y-3">
               <div className="flex items-center gap-2">
                 <Globe className="w-5 h-5 text-orange-600" />
-                <h3 className="text-xs font-bold text-slate-900">แนวทางการเชื่อมต่อและโฮสต์บน Cloudflare เพื่อใช้งานจริง</h3>
+                <h3 className="text-xs font-bold text-slate-900">แนวทางการเชื่อมต่อและโฮสต์บน Cloudflare</h3>
               </div>
 
-              <div className="space-y-2.5 text-xs text-slate-600 leading-relaxed">
+              <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
                 <div className="bg-white p-3 rounded-xl border border-orange-100 space-y-1">
                   <div className="font-bold text-orange-950 flex items-center gap-1.5">
                     <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] flex items-center justify-center font-bold">1</span>
-                    Cloudflare Pages (เว็บแอปพลิเคชัน & โดเมน)
+                    การผูก D1 Database บน Cloudflare
                   </div>
                   <p className="text-[11px] text-slate-500 pl-5">
-                    นำซอร์สโค้ดโปรเจกต์นี้ขึ้น GitHub แล้วเชื่อมต่อกับ <strong>Cloudflare Pages</strong> เลือก Build Command เป็น <code>npm run build</code> และ Output directory เป็น <code>dist</code> คุณจะได้โดเมน <code>.pages.dev</code> พร้อมใช้งานทั่วโลกฟรี
+                    ในหน้า Cloudflare Worker &rarr; แท็บ <strong>Bindings</strong> &rarr; กด <strong>Add binding</strong> &rarr; เลือก <strong>D1 Database</strong> &rarr; ตั้ง Variable name เป็น <code>DB</code> และเลือกฐานข้อมูล <code>academic-db</code>
                   </p>
                 </div>
 
                 <div className="bg-white p-3 rounded-xl border border-orange-100 space-y-1">
                   <div className="font-bold text-orange-950 flex items-center gap-1.5">
                     <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-                    Cloudflare D1 (ฐานข้อมูล SQL ไร้เซิร์ฟเวอร์)
+                    Cloudflare Pages (เว็บแอปพลิเคชัน & โดเมน)
                   </div>
                   <p className="text-[11px] text-slate-500 pl-5">
-                    สร้างฐานข้อมูล SQL บน Cloudflare D1 เพื่อบันทึกข้อมูลสมาชิก งานที่มอบหมาย และสถานะการส่งงานถาวรผ่าน Cloudflare Worker API
-                  </p>
-                </div>
-
-                <div className="bg-white p-3 rounded-xl border border-orange-100 space-y-1">
-                  <div className="font-bold text-orange-950 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
-                    ระบบไฟล์และโฟลเดอร์อัตโนมัติ Google Drive
-                  </div>
-                  <p className="text-[11px] text-slate-500 pl-5">
-                    เมื่อ Admin สั่งมอบหมายงาน ระบบจะสร้าง Sub-folder ภายใต้ Root Drive ID ให้อัตโนมัติ สมาชิกส่งงาน ไฟล์จะถูกรวบรวมเข้าโฟลเดอร์งานนั้นทันที
+                    นำซอร์สโค้ดโปรเจกต์นี้ขึ้น GitHub แล้วเชื่อมต่อกับ <strong>Cloudflare Pages</strong> เลือก Build Command เป็น <code>npm run build</code> และ Output directory เป็น <code>dist</code> คุณจะได้โดเมน <code>.pages.dev</code> พร้อมใช้งานทั่วโลกฟรี
                   </p>
                 </div>
               </div>

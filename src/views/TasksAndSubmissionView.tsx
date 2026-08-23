@@ -174,16 +174,27 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
       const file = files[i];
       try {
         const dataUrl = await readFileAsDataURL(file);
+        
+        // Upload to Google Drive via GAS or direct API
+        const driveResult = await uploadFileToDrive({
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          base64OrBlob: dataUrl,
+          size: file.size,
+        }, GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
+
         newAttachments.push({
-          id: `att_${Date.now()}_${i}`,
+          id: driveResult.id || `att_${Date.now()}_${i}`,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           url: dataUrl,
+          driveFileId: driveResult.id,
+          driveViewUrl: driveResult.webViewLink,
           uploadTime: new Date().toISOString(),
         });
       } catch (err) {
-        console.error('File read error:', err);
+        console.error('File read/upload error:', err);
       }
     }
 
@@ -290,20 +301,34 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
     setIsUploading(true);
     const newFiles: SubmissionFile[] = [];
 
+    const currentTask = tasks.find((t) => t.id === selectedTaskId);
+    const targetFolderId = currentTask?.driveFolderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
         const dataUrl = await readFileAsDataURL(file);
+
+        // Upload to Google Drive
+        const driveResult = await uploadFileToDrive({
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          base64OrBlob: dataUrl,
+          size: file.size,
+        }, targetFolderId);
+
         newFiles.push({
-          id: `subf_${Date.now()}_${i}`,
+          id: driveResult.id || `subf_${Date.now()}_${i}`,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           url: dataUrl,
+          driveFileId: driveResult.id,
+          driveViewUrl: driveResult.webViewLink,
           uploadTime: new Date().toISOString(),
         });
       } catch (err) {
-        console.error('File read error:', err);
+        console.error('File read/upload error:', err);
       }
     }
 

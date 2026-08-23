@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { AcademicDocument, User, DocumentCategory } from '../types';
 import { showSuccessAlert, showErrorAlert, showWarningAlert, showConfirmDialog, showToast } from '../utils/alerts';
 import { formatThaiDate, formatDateTime, formatFileSize, triggerFileDownload, readFileAsDataURL } from '../utils/storage';
-import { getDriveFolderUrl, GOOGLE_DRIVE_CONFIG } from '../utils/googleDrive';
+import { getDriveFolderUrl, GOOGLE_DRIVE_CONFIG, uploadFileToDrive } from '../utils/googleDrive';
 import {
   FolderGit2,
   FileText,
@@ -87,12 +87,23 @@ export const DocumentCenterView: React.FC<DocumentCenterViewProps> = ({
 
     try {
       const dataUrl = await readFileAsDataURL(file);
+      
+      // Upload to Google Drive
+      const driveResult = await uploadFileToDrive({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        base64OrBlob: dataUrl,
+        size: file.size,
+      }, GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
+
       setUploadedFile({
-        id: `docf_${Date.now()}`,
+        id: driveResult.id || `docf_${Date.now()}`,
         name: file.name,
         size: file.size,
         type: file.type || 'application/octet-stream',
         url: dataUrl,
+        driveFileId: driveResult.id,
+        driveViewUrl: driveResult.webViewLink,
         uploadTime: new Date().toISOString(),
       });
       showToast('success', `อัปโหลดไฟล์ "${file.name}" พร้อมบันทึก`);

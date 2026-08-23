@@ -1,4 +1,4 @@
-// Google Drive Integration & Cloudflare Configuration Utility
+// Google Drive Integration & Google Apps Script (GAS) Bridge Utility
 
 export const GOOGLE_DRIVE_CONFIG = {
   ROOT_FOLDER_ID: '1x4aph_PPHyhtmno5v7XeGJm2IW6WpnaE',
@@ -6,11 +6,28 @@ export const GOOGLE_DRIVE_CONFIG = {
   SCOPES: 'https://www.googleapis.com/auth/drive',
 };
 
-// Local storage key for drive token
+// Storage Keys
+const GAS_SCRIPT_URL_KEY = 'academic_system_gas_script_url';
 const DRIVE_TOKEN_KEY = 'academic_system_gdrive_token';
 const DRIVE_TOKEN_EXPIRY_KEY = 'academic_system_gdrive_token_expiry';
 
-// Check if user is connected to Google Drive
+// Default Google Apps Script URL deployed by user
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby93xSKaPMlPV4VaazjSaTRcTkU9y4P-pxqSWJErha1gnj3K2btIcgHcDxehxXkRB933w/exec';
+
+// Default / fallback GAS URL (can be set by user in Settings)
+export function getStoredScriptUrl(): string {
+  return localStorage.getItem(GAS_SCRIPT_URL_KEY) || DEFAULT_GAS_URL;
+}
+
+export function saveScriptUrl(url: string) {
+  localStorage.setItem(GAS_SCRIPT_URL_KEY, url.trim());
+}
+
+export function removeScriptUrl() {
+  localStorage.removeItem(GAS_SCRIPT_URL_KEY);
+}
+
+// Token management (if using OAuth direct)
 export function getStoredDriveToken(): string | null {
   const token = localStorage.getItem(DRIVE_TOKEN_KEY);
   const expiry = localStorage.getItem(DRIVE_TOKEN_EXPIRY_KEY);
@@ -28,220 +45,199 @@ export function saveDriveToken(token: string, expiresInSeconds: number = 3600) {
   localStorage.setItem(DRIVE_TOKEN_EXPIRY_KEY, String(Date.now() + (expiresInSeconds - 60) * 1000));
 }
 
-export function removeDriveToken() {
-  localStorage.removeItem(DRIVE_TOKEN_KEY);
-  localStorage.removeItem(DRIVE_TOKEN_EXPIRY_KEY);
-}
-
-// Request Token using GIS (Google Identity Services)
-declare global {
-  interface Window {
-    google?: any;
-    gapi?: any;
-  }
-}
-
-export function requestGoogleDriveAuth(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // If we already have a valid token
-    const existing = getStoredDriveToken();
-    if (existing) {
-      resolve(existing);
-      return;
-    }
-
-    if (!window.google?.accounts?.oauth2) {
-      reject(new Error('Google Identity Services script not loaded.'));
-      return;
-    }
-
-    try {
-      // In AI Studio environment or OAuth setup, token client is initialized
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: '309062802038-web-client.apps.googleusercontent.com', // Provisioned or fallback
-        scope: GOOGLE_DRIVE_CONFIG.SCOPES,
-        callback: (resp: any) => {
-          if (resp.error) {
-            reject(new Error(resp.error_description || resp.error));
-            return;
-          }
-          if (resp.access_token) {
-            saveDriveToken(resp.access_token, resp.expires_in || 3600);
-            resolve(resp.access_token);
-          } else {
-            reject(new Error('No access token received'));
-          }
-        },
-      });
-
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    } catch (err: any) {
-      reject(err);
-    }
-  });
-}
-
-// Google Drive API Helpers
-export async function getDriveHeaders(accessToken?: string) {
-  const token = accessToken || getStoredDriveToken();
-  if (!token) {
-    throw new Error('กรุณาเชื่อมต่อ Google Drive ก่อนดำเนินการ');
-  }
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-
 /**
- * Find or Create a folder inside parent folder in Google Drive
+ * Find or Create a folder inside parent folder in Google Drive via GAS or Drive API
  */
 export async function findOrCreateDriveFolder(
   folderName: string,
-  parentFolderId: string = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID,
-  accessToken?: string
+  parentFolderId: string = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID
 ): Promise<{ id: string; webViewLink: string }> {
-  const token = accessToken || getStoredDriveToken();
-  if (!token) {
-    // Return simulated root if offline/not connected yet
-    return {
-      id: `${parentFolderId}_${folderName.replace(/\s+/g, '_')}`,
-      webViewLink: `https://drive.google.com/drive/folders/${parentFolderId}`,
-    };
+  const scriptUrl = getStoredScriptUrl();
+
+  // 1. If Google Apps Script Web App is configured, use it (zero login required)
+  if (scriptUrl) {
+    try {
+      const res = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'createFolder',
+          folderName,
+          parentFolderId,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.id) {
+          return {
+            id: data.id,
+            webViewLink: data.webViewLink || `https://drive.google.com/drive/folders/${data.id}`,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('GAS Folder creation failed, falling back:', e);
+    }
   }
 
-  try {
-    // 1. Search existing folder
-    const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed=false`;
-    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink)`;
+  // 2. Direct API via Token if available
+  const token = getStoredDriveToken();
+  if (token) {
+    try {
+      const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed=false`;
+      const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink)`;
 
-    const res = await fetch(searchUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const res = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data.files && data.files.length > 0) {
+      if (res.ok) {
+        const data = await res.json();
+        if (data.files && data.files.length > 0) {
+          return {
+            id: data.files[0].id,
+            webViewLink: data.files[0].webViewLink || `https://drive.google.com/drive/folders/${data.files[0].id}`,
+          };
+        }
+      }
+
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentFolderId],
+        }),
+      });
+
+      if (createRes.ok) {
+        const created = await createRes.json();
         return {
-          id: data.files[0].id,
-          webViewLink: data.files[0].webViewLink || `https://drive.google.com/drive/folders/${data.files[0].id}`,
+          id: created.id,
+          webViewLink: created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`,
         };
       }
+    } catch (e) {
+      console.warn('OAuth folder creation failed:', e);
     }
-
-    // 2. Create folder if not found
-    const createUrl = 'https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink';
-    const createRes = await fetch(createUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [parentFolderId],
-      }),
-    });
-
-    if (createRes.ok) {
-      const created = await createRes.json();
-      return {
-        id: created.id,
-        webViewLink: created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`,
-      };
-    }
-  } catch (e) {
-    console.error('Error finding/creating Google Drive folder:', e);
   }
 
+  // Fallback link directly to root folder
   return {
-    id: `${parentFolderId}_folder`,
+    id: `${parentFolderId}_${folderName.replace(/\s+/g, '_')}`,
     webViewLink: `https://drive.google.com/drive/folders/${parentFolderId}`,
   };
 }
 
 /**
- * Upload a file directly to Google Drive folder using Multipart Upload
+ * Upload a file directly to Google Drive via Google Apps Script (Recommended) or Drive API
  */
 export async function uploadFileToDrive(
-  file: File | { name: string; type: string; base64OrBlob: string | Blob },
-  folderId: string = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID,
-  accessToken?: string
+  file: File | { name: string; type: string; base64OrBlob: string | Blob; size?: number },
+  folderId: string = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID
 ): Promise<{ id: string; name: string; webViewLink: string; webContentLink?: string; size: number }> {
-  const token = accessToken || getStoredDriveToken();
   const fileName = file.name;
   const fileType = file.type || 'application/octet-stream';
+  const scriptUrl = getStoredScriptUrl();
 
-  if (!token) {
-    // Fallback object link
-    return {
-      id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      name: fileName,
-      webViewLink: `https://drive.google.com/drive/folders/${folderId}`,
-      webContentLink: `https://drive.google.com/drive/folders/${folderId}`,
-      size: (file as any).size || 1024,
-    };
+  // Convert to base64 if needed
+  let base64String = '';
+  let fileSize = file.size || 1024;
+
+  if (file instanceof File || file instanceof Blob) {
+    base64String = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    fileSize = file.size;
+  } else if (typeof file.base64OrBlob === 'string') {
+    base64String = file.base64OrBlob;
   }
 
-  try {
-    let fileBlob: Blob;
-    if (file instanceof File || file instanceof Blob) {
-      fileBlob = file;
-    } else {
-      // Decode data URL / base64
-      const parts = (file.base64OrBlob as string).split(',');
+  // Method 1: Google Apps Script Web App (Most reliable for Google Drive upload)
+  if (scriptUrl && base64String) {
+    try {
+      const res = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'uploadFile',
+          fileName,
+          fileBase64: base64String,
+          mimeType: fileType,
+          folderId: folderId && folderId.startsWith('1x4') ? folderId : GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.id) {
+          return {
+            id: data.id,
+            name: data.name || fileName,
+            webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`,
+            webContentLink: data.downloadUrl || `https://drive.google.com/uc?id=${data.id}&export=download`,
+            size: data.size || fileSize,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Upload via Google Apps Script failed:', err);
+    }
+  }
+
+  // Method 2: Direct OAuth Token if user authenticated
+  const token = getStoredDriveToken();
+  if (token && base64String) {
+    try {
+      const parts = base64String.split(',');
       const byteString = atob(parts.length > 1 ? parts[1] : parts[0]);
       const ab = new ArrayBuffer(byteString.length);
       const ia = new Uint8Array(ab);
       for (let i = 0; i < byteString.length; i++) {
         ia[i] = byteString.charCodeAt(i);
       }
-      fileBlob = new Blob([ab], { type: fileType });
+      const fileBlob = new Blob([ab], { type: fileType });
+
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }));
+      form.append('file', fileBlob);
+
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          id: data.id,
+          name: data.name || fileName,
+          webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`,
+          webContentLink: data.webContentLink || `https://drive.google.com/uc?id=${data.id}&export=download`,
+          size: parseInt(data.size || '0', 10) || fileSize,
+        };
+      }
+    } catch (err) {
+      console.warn('OAuth direct upload failed:', err);
     }
-
-    const metadata = {
-      name: fileName,
-      parents: [folderId],
-    };
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', fileBlob);
-
-    const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size';
-
-    const res = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: form,
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        id: data.id,
-        name: data.name || fileName,
-        webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`,
-        webContentLink: data.webContentLink || `https://drive.google.com/uc?id=${data.id}&export=download`,
-        size: parseInt(data.size || '0', 10) || fileBlob.size,
-      };
-    } else {
-      const errText = await res.text();
-      console.warn('Drive upload API returned non-ok status:', res.status, errText);
-    }
-  } catch (err) {
-    console.error('Error uploading file to Drive:', err);
   }
 
+  // Fallback: Local reference with direct Google Drive Folder Link
   return {
-    id: `gdrive_${Date.now()}`,
+    id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     name: fileName,
-    webViewLink: `https://drive.google.com/drive/folders/${folderId}`,
-    size: 1024,
+    webViewLink: `https://drive.google.com/drive/folders/${folderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID}`,
+    webContentLink: `https://drive.google.com/drive/folders/${folderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID}`,
+    size: fileSize,
   };
 }
 
@@ -249,7 +245,7 @@ export async function uploadFileToDrive(
  * Get direct Google Drive folder URL for a given ID or fallback to root ID
  */
 export function getDriveFolderUrl(folderId?: string): string {
-  const id = folderId && folderId.trim() ? folderId : GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
+  const id = folderId && folderId.trim() && !folderId.includes('_') ? folderId : GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
   return `https://drive.google.com/drive/folders/${id}`;
 }
 
@@ -259,3 +255,76 @@ export function getDriveFolderUrl(folderId?: string): string {
 export function getDriveFileUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
+
+/**
+ * Template Code for Google Apps Script
+ */
+export const GOOGLE_APPS_SCRIPT_CODE = `/**
+ * GOOGLE APPS SCRIPT: สะพานเชื่อมระบบงานวิชาการ -> Google Drive
+ * โฟลเดอร์ปลายทาง: 1x4aph_PPHyhtmno5v7XeGJm2IW6WpnaE
+ */
+
+const ROOT_FOLDER_ID = "1x4aph_PPHyhtmno5v7XeGJm2IW6WpnaE";
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const action = data.action;
+
+    // 1. สร้างหรือค้นหาโฟลเดอร์งานวิชาการ
+    if (action === "createFolder") {
+      const folderName = data.folderName || "งานวิชาการ";
+      const parentId = data.parentFolderId || ROOT_FOLDER_ID;
+      const parentFolder = DriveApp.getFolderById(parentId);
+      
+      const existing = parentFolder.getFoldersByName(folderName);
+      if (existing.hasNext()) {
+        const f = existing.next();
+        return jsonResponse({ status: "success", id: f.getId(), webViewLink: f.getUrl() });
+      }
+      
+      const newFolder = parentFolder.createFolder(folderName);
+      newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      return jsonResponse({ status: "success", id: newFolder.getId(), webViewLink: newFolder.getUrl() });
+    }
+
+    // 2. อัปโหลดไฟล์ส่งงานเข้า Google Drive อัตโนมัติ
+    if (action === "uploadFile") {
+      const fileName = data.fileName || "เอกสาร";
+      const mimeType = data.mimeType || "application/octet-stream";
+      const base64Data = data.fileBase64.replace(/^data:.*?;base64,/, "");
+      const folderId = (data.folderId && data.folderId.indexOf("1x4") === 0) ? data.folderId : ROOT_FOLDER_ID;
+
+      const folder = DriveApp.getFolderById(folderId);
+      const decodedBlob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+      const file = folder.createFile(decodedBlob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      return jsonResponse({
+        status: "success",
+        id: file.getId(),
+        name: file.getName(),
+        webViewLink: file.getUrl(),
+        downloadUrl: file.getDownloadUrl(),
+        size: file.getSize()
+      });
+    }
+
+    return jsonResponse({ status: "error", message: "ไม่พบ Action ที่ระบุ" });
+  } catch (error) {
+    return jsonResponse({ status: "error", message: error.toString() });
+  }
+}
+
+function doGet(e) {
+  return jsonResponse({
+    status: "success",
+    message: "ระบบเชื่อมต่อ Google Drive พร้อมทำงาน!",
+    rootFolderId: ROOT_FOLDER_ID
+  });
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
