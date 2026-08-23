@@ -328,107 +328,132 @@ const DEFAULT_DOCUMENTS: AcademicDocument[] = [
   },
 ];
 
+// Safe localStorage write wrapper to prevent QuotaExceededError and white screens
+const safeSetItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`localStorage save error for ${key}:`, err);
+    try {
+      // If quota exceeded, remove obsolete keys or try once more
+      localStorage.setItem(key, value);
+    } catch {
+      // Silently prevent crashing
+    }
+  }
+};
+
 // Helper functions for Local Storage
 export const getStoredUsers = (): User[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.USERS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
+      safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
       return DEFAULT_USERS;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_USERS;
   } catch {
     return DEFAULT_USERS;
   }
 };
 
 export const saveUsers = (users: User[]): void => {
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(users));
 };
 
 export const getStoredTasks = (): Task[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.TASKS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(DEFAULT_TASKS));
+      safeSetItem(STORAGE_KEYS.TASKS, JSON.stringify(DEFAULT_TASKS));
       return DEFAULT_TASKS;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : DEFAULT_TASKS;
   } catch {
     return DEFAULT_TASKS;
   }
 };
 
 export const saveTasks = (tasks: Task[]): void => {
-  localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+  safeSetItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
 };
 
 export const getStoredSubmissions = (): Submission[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.SUBMISSIONS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(DEFAULT_SUBMISSIONS));
+      safeSetItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(DEFAULT_SUBMISSIONS));
       return DEFAULT_SUBMISSIONS;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : DEFAULT_SUBMISSIONS;
   } catch {
     return DEFAULT_SUBMISSIONS;
   }
 };
 
 export const saveSubmissions = (submissions: Submission[]): void => {
-  localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(submissions));
+  safeSetItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(submissions));
 };
 
 export const getStoredDocuments = (): AcademicDocument[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(DEFAULT_DOCUMENTS));
+      safeSetItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(DEFAULT_DOCUMENTS));
       return DEFAULT_DOCUMENTS;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : DEFAULT_DOCUMENTS;
   } catch {
     return DEFAULT_DOCUMENTS;
   }
 };
 
 export const saveDocuments = (documents: AcademicDocument[]): void => {
-  localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(documents));
+  safeSetItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(documents));
 };
 
 export const getStoredConfig = (): SchoolConfig => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.CONFIG);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(DEFAULT_CONFIG));
+      safeSetItem(STORAGE_KEYS.CONFIG, JSON.stringify(DEFAULT_CONFIG));
       return DEFAULT_CONFIG;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return parsed && typeof parsed === 'object' ? { ...DEFAULT_CONFIG, ...parsed } : DEFAULT_CONFIG;
   } catch {
     return DEFAULT_CONFIG;
   }
 };
 
 export const saveConfig = (config: SchoolConfig): void => {
-  localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
+  safeSetItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
 };
 
 export const getStoredCurrentUser = (): User | null => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (!data) return null;
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return parsed && parsed.id ? parsed : null;
   } catch {
     return null;
   }
 };
 
 export const saveCurrentUser = (user: User | null): void => {
-  if (!user) {
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-  } else {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+  try {
+    if (!user) {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    } else {
+      safeSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    }
+  } catch (err) {
+    console.error('Error saving current user:', err);
   }
 };
 
@@ -511,3 +536,63 @@ export const readFileAsDataURL = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
   });
 };
+
+// Compress and resize images (Avatars, School Logos) to lightweight base64 to protect localStorage
+export const compressImage = (
+  fileOrDataUrl: File | string,
+  maxWidth = 256,
+  maxHeight = 256,
+  quality = 0.82
+): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedDataUrl);
+    };
+
+    img.onerror = () => {
+      resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+    };
+
+    if (typeof fileOrDataUrl === 'string') {
+      img.src = fileOrDataUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(fileOrDataUrl);
+    }
+  });
+};
+

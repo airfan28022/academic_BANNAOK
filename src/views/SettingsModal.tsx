@@ -1,37 +1,18 @@
 import React, { useState, useRef } from 'react';
 import { User, SchoolConfig } from '../types';
-import { showSuccessAlert, showErrorAlert, showWarningAlert, showConfirmDialog, showToast } from '../utils/alerts';
-import { readFileAsDataURL, formatThaiDate } from '../utils/storage';
-import {
-  getDriveFolderUrl,
-  GOOGLE_DRIVE_CONFIG,
-  getStoredScriptUrl,
-  saveScriptUrl,
-  GOOGLE_APPS_SCRIPT_CODE,
-} from '../utils/googleDrive';
+import { showSuccessAlert, showErrorAlert, showConfirmDialog, showToast } from '../utils/alerts';
+import { compressImage, formatThaiDate } from '../utils/storage';
 import {
   Settings,
   User as UserIcon,
   Building,
   Upload,
-  Lock,
   Users,
   CheckCircle2,
   XCircle,
   Trash2,
   X,
-  Shield,
   Key,
-  Cloud,
-  ExternalLink,
-  HardDrive,
-  Globe,
-  Database,
-  Copy,
-  Check,
-  Code,
-  Sparkles,
-  Link,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -62,56 +43,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const isAdmin = currentUser.role === 'admin';
-  const [activeTab, setActiveTab] = useState<'profile' | 'members' | 'cloud' | 'password'>('profile');
-  const [copiedDriveId, setCopiedDriveId] = useState(false);
-  const [copiedGasCode, setCopiedGasCode] = useState(false);
-  const [gasUrlInput, setGasUrlInput] = useState(getStoredScriptUrl());
-  const [isTestingGas, setIsTestingGas] = useState(false);
-  const [gasStatusMsg, setGasStatusMsg] = useState<string | null>(null);
-
-  const handleCopyDriveId = () => {
-    navigator.clipboard.writeText(GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
-    setCopiedDriveId(true);
-    showToast('success', 'คัดลอก Folder ID สำเร็จ');
-    setTimeout(() => setCopiedDriveId(false), 2000);
-  };
-
-  const handleCopyGasCode = () => {
-    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
-    setCopiedGasCode(true);
-    showToast('success', 'คัดลอกโค้ด Google Apps Script แล้ว! นำไปวางใน script.google.com ได้ทันที');
-    setTimeout(() => setCopiedGasCode(false), 2500);
-  };
-
-  const handleSaveGasUrl = () => {
-    saveScriptUrl(gasUrlInput);
-    showToast('success', 'บันทึก URL สะพานเชื่อมต่อ Google Drive แล้ว');
-  };
-
-  const handleTestGasConnection = async () => {
-    if (!gasUrlInput.trim()) {
-      showWarningAlert('ยังไม่ได้ใส่ URL', 'กรุณาใส่ Web App URL ของ Google Apps Script ก่อนทดสอบ');
-      return;
-    }
-    setIsTestingGas(true);
-    setGasStatusMsg(null);
-    try {
-      const res = await fetch(gasUrlInput.trim());
-      const data = await res.json();
-      if (data.status === 'success') {
-        saveScriptUrl(gasUrlInput);
-        setGasStatusMsg('เชื่อมต่อสำเร็จ! Google Drive พร้อมรับไฟล์แล้ว');
-        showSuccessAlert('เชื่อมต่อสำเร็จ!', 'ระบบทดสอบส่งข้อมูลไปยัง Google Apps Script เรียบร้อย ไฟล์จะถูกส่งเข้า Drive โดยอัตโนมัติ');
-      } else {
-        setGasStatusMsg('การตอบรับไม่สมบูรณ์: ' + (data.message || 'Error'));
-      }
-    } catch (err: any) {
-      setGasStatusMsg('เชื่อมต่อไม่สำเร็จ ตรวจสอบว่าเลือก "Who has access: Anyone" ตอน Deploy หรือยัง');
-      showErrorAlert('ทดสอบไม่สำเร็จ', 'ไม่สามารถเชื่อมต่อได้ กรุณาตรวจสอบว่าตั้งค่า New Deployment เป็น Web app และเลือก Anyone (ทุกคน) หรือยัง');
-    } finally {
-      setIsTestingGas(false);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'profile' | 'members' | 'password'>('profile');
 
   // Profile Form States
   const [name, setName] = useState(currentUser.name);
@@ -121,39 +53,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [term, setTerm] = useState(schoolConfig.term || '1');
   const [userAvatar, setUserAvatar] = useState(currentUser.avatar || '');
   const [schoolLogo, setSchoolLogo] = useState(schoolConfig.schoolLogo || '');
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
+  const [isProcessingLogo, setIsProcessingLogo] = useState(false);
 
   // Password Form States
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // File Refs
+  // File Input Refs
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const logoFileRef = useRef<HTMLInputElement>(null);
 
-  // Avatar Upload
+  // Avatar Upload with Compression
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const dataUrl = await readFileAsDataURL(file);
-      setUserAvatar(dataUrl);
-      showToast('success', 'เลือกรูปโปรไฟล์เรียบร้อยแล้ว');
+      setIsProcessingAvatar(true);
+      const compressedDataUrl = await compressImage(file, 256, 256, 0.85);
+      setUserAvatar(compressedDataUrl);
+      showToast('success', 'เลือกและปรับขนาดรูปโปรไฟล์เรียบร้อย');
     } catch (err) {
-      console.error(err);
+      console.error('Error reading avatar:', err);
+      showErrorAlert('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์รูปภาพได้');
+    } finally {
+      setIsProcessingAvatar(false);
     }
   };
 
-  // Logo Upload (Admin)
+  // Logo Upload with Compression
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const dataUrl = await readFileAsDataURL(file);
-      setSchoolLogo(dataUrl);
-      showToast('success', 'เลือกโลโก้โรงเรียนเรียบร้อยแล้ว');
+      setIsProcessingLogo(true);
+      const compressedDataUrl = await compressImage(file, 256, 256, 0.85);
+      setSchoolLogo(compressedDataUrl);
+      showToast('success', 'เลือกและปรับขนาดโลโก้เรียบร้อย');
     } catch (err) {
-      console.error(err);
+      console.error('Error reading logo:', err);
+    } finally {
+      setIsProcessingLogo(false);
     }
   };
 
@@ -189,7 +130,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       onUpdateSchoolConfig(updatedConfig);
     }
 
-    showSuccessAlert('บันทึกข้อมูลส่วนตัวสำเร็จ!', 'ข้อมูลได้รับการอัปเดตเรียบร้อยแล้ว');
+    showSuccessAlert('บันทึกข้อมูลสำเร็จ!', 'ข้อมูลส่วนตัวและระบบได้รับการบันทึกเรียบร้อยแล้ว');
   };
 
   // Change Password
@@ -202,7 +143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     if (!newPassword || newPassword.length < 4) {
-      showErrorAlert('รหัสผ่านใหม่สั้นเกินไป', 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+      showErrorAlert('รหัสผ่านสั้นเกินไป', 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
       return;
     }
 
@@ -279,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation (Drive & Cloudflare removed per user request, handled seamlessly behind the scenes) */}
         <div className="flex p-1 my-4 bg-slate-100 rounded-2xl">
           <button
             onClick={() => setActiveTab('profile')}
@@ -310,19 +251,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           )}
 
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab('cloud')}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'cloud'
-                  ? 'bg-white text-purple-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Cloud className="w-3.5 h-3.5" /> Drive & Cloudflare
-            </button>
-          )}
-
           <button
             onClick={() => setActiveTab('password')}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
@@ -342,9 +270,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* User Avatar Upload */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                รูปโปรไฟล์ผู้ใช้ (Choose file)
+                รูปโปรไฟล์ผู้ใช้ (Avatar)
               </label>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 p-3 bg-purple-50/50 border border-purple-100 rounded-2xl">
                 <div className="w-16 h-16 rounded-2xl bg-purple-100 border border-purple-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-xs">
                   {userAvatar ? (
                     <img
@@ -355,12 +283,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   ) : (
                     <span className="text-xl font-black text-purple-700">
-                      {name.charAt(0)}
+                      {name.charAt(0) || 'U'}
                     </span>
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <input
                     type="file"
                     accept="image/*"
@@ -371,12 +299,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => avatarFileRef.current?.click()}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-purple-50 text-slate-700 hover:text-purple-700 border border-slate-200 transition-colors flex items-center gap-1.5"
+                    disabled={isProcessingAvatar}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-purple-100/50 text-purple-700 border border-purple-200 transition-colors flex items-center gap-1.5 shadow-2xs"
                   >
-                    <Upload className="w-3.5 h-3.5" /> เลือกไฟล์รูปโปรไฟล์ (Choose file)
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isProcessingAvatar ? 'กำลังปรับขนาดภาพ...' : 'เลือกไฟล์รูปโปรไฟล์'}</span>
                   </button>
                   <p className="text-[10px] text-slate-400">
-                    รองรับไฟล์ภาพ JPG, PNG, WEBP
+                    ระบบจะบีบอัดภาพให้อัตโนมัติ ป้องกันปัญหาระบบค้างและทำงานรวดเร็ว
                   </p>
                 </div>
               </div>
@@ -406,9 +336,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* School Logo Upload */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    โลโก้โรงเรียน (Choose file)
+                    โลโก้โรงเรียน
                   </label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
                     <div className="w-14 h-14 rounded-2xl bg-purple-600 p-0.5 shadow-xs overflow-hidden flex items-center justify-center flex-shrink-0">
                       {schoolLogo ? (
                         <img
@@ -422,7 +352,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 flex-1">
                       <input
                         type="file"
                         accept="image/*"
@@ -433,9 +363,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => logoFileRef.current?.click()}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-purple-50 text-slate-700 hover:text-purple-700 border border-slate-200 transition-colors flex items-center gap-1.5"
+                        disabled={isProcessingLogo}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center gap-1.5 shadow-2xs"
                       >
-                        <Upload className="w-3.5 h-3.5" /> เลือกไฟล์โลโก้โรงเรียน (Choose file)
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isProcessingLogo ? 'กำลังปรับขนาดภาพ...' : 'เลือกไฟล์โลโก้โรงเรียน'}</span>
                       </button>
                       <p className="text-[10px] text-slate-400">
                         ตราสัญลักษณ์โรงเรียน / สถานศึกษา
@@ -483,6 +415,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
+                </div>
+
+                {/* Department Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    ชื่อฝ่าย / กลุ่มงาน
+                  </label>
+                  <input
+                    type="text"
+                    value={departmentName}
+                    onChange={(e) => setDepartmentName(e.target.value)}
+                    placeholder="กลุ่มบริหารงานวิชาการ"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                 </div>
 
               </div>
@@ -550,7 +496,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </button>
                         <button
                           onClick={() => handleReject(user)}
-                          className="px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold text-xs flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs flex items-center gap-1"
                         >
                           <XCircle className="w-3.5 h-3.5" /> ปฏิเสธ
                         </button>
@@ -567,19 +513,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 สมาชิกที่อนุมัติแล้ว ({approvedUsers.length} ท่าน)
               </h4>
 
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {approvedUsers.map((user) => (
                   <div
                     key={user.id}
-                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs hover:bg-purple-50/30 transition-colors"
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3 text-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center">
-                        {user.name.charAt(0)}
+                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold overflow-hidden flex-shrink-0">
+                        {user.avatar ? (
+                          <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          user.name.charAt(0)
+                        )}
                       </div>
                       <div>
                         <div className="font-bold text-slate-900">{user.name}</div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[11px] text-slate-500">
                           ID: {user.userId} &bull; {user.department || '-'}
                         </div>
                       </div>
@@ -587,8 +537,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <button
                       onClick={() => handleDeleteMember(user)}
-                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors"
-                      title="ลบสมาชิกออกจากระบบ"
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      title="ลบสมาชิก"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -600,171 +550,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
-        {/* TAB 3: CLOUD & GOOGLE DRIVE INTEGRATION GUIDE */}
-        {activeTab === 'cloud' && (
-          <div className="space-y-5 py-2">
-            
-            {/* Google Apps Script (GAS) Web App - The Ultimate Bridge for direct Google Drive upload */}
-            <div className="p-4 bg-gradient-to-br from-purple-50 via-indigo-50/50 to-white border border-purple-200/80 rounded-2xl space-y-3.5 shadow-xs">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white shadow-xs flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      สะพานเชื่อมต่อ Google Apps Script (แนะนำสูงสุด)
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">ส่งไฟล์ตรง 100%</span>
-                    </h3>
-                    <p className="text-[11px] text-slate-500">ช่วยให้อัปโหลดไฟล์และสร้างโฟลเดอร์ลง Google Drive ได้ทันทีโดยผู้ใช้ไม่ต้องล็อกอิน Google ซ้ำ</p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCopyGasCode}
-                  className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs flex items-center gap-1.5 transition-all flex-shrink-0"
-                >
-                  {copiedGasCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Code className="w-3.5 h-3.5" />}
-                  <span>{copiedGasCode ? 'คัดลอกโค้ดแล้ว!' : 'คัดลอกโค้ด (.gs)'}</span>
-                </button>
-              </div>
-
-              {/* GAS Web App URL input */}
-              <div className="space-y-1.5 bg-white p-3 rounded-xl border border-purple-100">
-                <label className="block text-[11px] font-bold text-slate-700">
-                  Google Apps Script Web App URL (ที่ได้จากการ Deploy)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={gasUrlInput}
-                    onChange={(e) => setGasUrlInput(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
-                    className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono text-purple-900 placeholder:text-slate-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleTestGasConnection}
-                    disabled={isTestingGas}
-                    className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1 transition-all"
-                  >
-                    {isTestingGas ? 'กำลังทดสอบ...' : 'ทดสอบ & บันทึก'}
-                  </button>
-                </div>
-                {gasStatusMsg && (
-                  <p className={`text-[11px] font-medium ${gasStatusMsg.includes('สำเร็จ') ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {gasStatusMsg}
-                  </p>
-                )}
-              </div>
-
-              {/* Steps to deploy GAS */}
-              <div className="bg-white/80 p-3 rounded-xl border border-purple-100/70 text-[11px] text-slate-600 space-y-1.5">
-                <div className="font-bold text-purple-950 flex items-center gap-1">
-                  <span>📌 วิธีนำโค้ดไปวางใน Google Apps Script (ทำครั้งเดียว):</span>
-                </div>
-                <ol className="list-decimal list-inside space-y-1 pl-1 text-slate-600">
-                  <li>กดปุ่ม <strong>"คัดลอกโค้ด (.gs)"</strong> ด้านบน แล้วเปิดเว็บ <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-purple-600 underline font-bold inline-flex items-center gap-0.5">script.google.com <ExternalLink className="w-2.5 h-2.5" /></a></li>
-                  <li>กด <strong>New Project (โครงการใหม่)</strong> $\rightarrow$ วางโค้ดที่คัดลอกลงไปทั้งหมด $\rightarrow$ กดบันทึก (Ctrl+S)</li>
-                  <li>กด <strong>Deploy (การทำให้ใช้งานได้)</strong> $\rightarrow$ <strong>New deployment</strong> $\rightarrow$ เลือกประเภท <strong>Web app</strong>:<br/>
-                    &bull; <em>Execute as</em>: เลือก <strong>Me (ฉัน)</strong><br/>
-                    &bull; <em>Who has access</em>: เลือก <strong>Anyone (ทุกคน)</strong><br/>
-                  </li>
-                  <li>กด Deploy แล้วคัดลอก <strong>Web app URL</strong> มาวางในช่องด้านบนนี้แล้วกด "ทดสอบ & บันทึก"</li>
-                </ol>
-              </div>
-            </div>
-
-            {/* Google Drive Status Box */}
-            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-white text-amber-500 shadow-xs flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5" viewBox="0 0 87.3 78" fill="currentColor">
-                      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                      <path d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44C.4 49.9 0 51.45 0 53h27.5z" fill="#00ac47"/>
-                      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
-                      <path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.95 0H34.35c-1.55 0-3.1.4-4.45 1.2z" fill="#00832d"/>
-                      <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.45 1.2h50.9c1.55 0 3.1-.4 4.45-1.2z" fill="#26842a"/>
-                      <path d="m73.55 25-13.75-23.8c-1.35-.8-2.9-1.2-4.45-1.2h-.1l13.75 23.8 14.7 25.45c.8-1.4 1.2-2.95 1.2-4.5 0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900">Google Drive Folder ID ปลายทาง</h3>
-                    <p className="text-[11px] text-slate-500">โฟลเดอร์หลักสำหรับจัดเก็บไฟล์ที่ส่งและเอกสารทั้งหมด</p>
-                  </div>
-                </div>
-
-                <a
-                  href={getDriveFolderUrl(GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs flex items-center gap-1 transition-all flex-shrink-0"
-                >
-                  <span>เปิดโฟลเดอร์</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-
-              <div className="mt-3 flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200/80">
-                <code className="text-xs text-purple-700 font-mono flex-1 select-all break-all">
-                  {GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID}
-                </code>
-                <button
-                  onClick={handleCopyDriveId}
-                  className="p-1 text-slate-400 hover:text-purple-600 transition-colors"
-                  title="คัดลอก ID"
-                >
-                  {copiedDriveId ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Cloudflare Hosting & Database Guide */}
-            <div className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-orange-600" />
-                <h3 className="text-xs font-bold text-slate-900">แนวทางการเชื่อมต่อและโฮสต์บน Cloudflare</h3>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
-                <div className="bg-white p-3 rounded-xl border border-orange-100 space-y-1">
-                  <div className="font-bold text-orange-950 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] flex items-center justify-center font-bold">1</span>
-                    การผูก D1 Database บน Cloudflare
-                  </div>
-                  <p className="text-[11px] text-slate-500 pl-5">
-                    ในหน้า Cloudflare Worker &rarr; แท็บ <strong>Bindings</strong> &rarr; กด <strong>Add binding</strong> &rarr; เลือก <strong>D1 Database</strong> &rarr; ตั้ง Variable name เป็น <code>DB</code> และเลือกฐานข้อมูล <code>academic-db</code>
-                  </p>
-                </div>
-
-                <div className="bg-white p-3 rounded-xl border border-orange-100 space-y-1">
-                  <div className="font-bold text-orange-950 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-                    Cloudflare Pages (เว็บแอปพลิเคชัน & โดเมน)
-                  </div>
-                  <p className="text-[11px] text-slate-500 pl-5">
-                    นำซอร์สโค้ดโปรเจกต์นี้ขึ้น GitHub แล้วเชื่อมต่อกับ <strong>Cloudflare Pages</strong> เลือก Build Command เป็น <code>npm run build</code> และ Output directory เป็น <code>dist</code> คุณจะได้โดเมน <code>.pages.dev</code> พร้อมใช้งานทั่วโลกฟรี
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 btn-glow-purple"
-              >
-                เข้าใจแล้ว / ปิดหน้าต่าง
-              </button>
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB 4: CHANGE PASSWORD */}
+        {/* TAB 3: CHANGE PASSWORD */}
         {activeTab === 'password' && (
           <form onSubmit={handleChangePassword} className="space-y-4 py-2">
             
