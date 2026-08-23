@@ -58,6 +58,9 @@ export async function findOrCreateDriveFolder(
   // 1. If Google Apps Script Web App is configured, use it (zero login required)
   if (scriptUrl) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s fast timeout
+
       const res = await fetch(scriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -66,7 +69,10 @@ export async function findOrCreateDriveFolder(
           folderName,
           parentFolderId,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -78,7 +84,7 @@ export async function findOrCreateDriveFolder(
         }
       }
     } catch (e) {
-      console.warn('GAS Folder creation failed, falling back:', e);
+      console.warn('GAS Folder creation failed or timed out, falling back:', e);
     }
   }
 
@@ -184,7 +190,7 @@ export async function uploadFileToDrive(
   if (scriptUrl && base64String) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s fast timeout to prevent freezing
 
       const res = await fetch(scriptUrl, {
         method: 'POST',
@@ -214,7 +220,7 @@ export async function uploadFileToDrive(
         }
       }
     } catch (err) {
-      console.warn('Upload via Google Apps Script failed/timed out:', err);
+      console.warn('Upload via Google Apps Script timed out/failed, using direct local link fallback:', err);
     }
   }
 

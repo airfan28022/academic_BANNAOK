@@ -220,23 +220,11 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
     }
 
     const nowIso = new Date().toISOString();
+    const cleanTitle = taskTitle.trim();
 
-    // Find or create dedicated Drive Folder for assignment
+    // Fast instant task creation with non-blocking Drive folder sync
     let driveFolderId = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
     let driveFolderUrl = getDriveFolderUrl(GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
-
-    if (adminTab === 'assignment') {
-      try {
-        const folder = await findOrCreateDriveFolder(
-          `[งานวิชาการ] ${taskTitle.trim()}`,
-          GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID
-        );
-        driveFolderId = folder.id;
-        driveFolderUrl = folder.webViewLink;
-      } catch (err) {
-        console.warn('Google Drive folder setup fallback:', err);
-      }
-    }
 
     if (editingTaskId) {
       const existing = tasks.find((t) => t.id === editingTaskId);
@@ -244,24 +232,23 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
         const updated: Task = {
           ...existing,
           type: adminTab,
-          title: taskTitle.trim(),
+          title: cleanTitle,
           description: taskDesc.trim(),
           category: adminTab === 'assignment' ? 'งานวิชาการ' : 'ประกาศทั่วไป',
           dueDate: taskDueDate,
           dueTime: undefined,
           attachments: adminAttachments,
-          driveFolderId: existing.driveFolderId || driveFolderId,
-          driveFolderUrl: existing.driveFolderUrl || driveFolderUrl,
           updatedAt: nowIso,
         };
         onUpdateTask(updated);
-        showSuccessAlert('บันทึกการแก้ไขสำเร็จ!', `อัปเดต "${taskTitle}" เรียบร้อยแล้ว`);
+        showSuccessAlert('บันทึกการแก้ไขสำเร็จ!', `อัปเดต "${cleanTitle}" เรียบร้อยแล้ว`);
       }
     } else {
+      const newTaskId = `tsk_${Date.now()}`;
       const newTask: Task = {
-        id: `tsk_${Date.now()}`,
+        id: newTaskId,
         type: adminTab,
-        title: taskTitle.trim(),
+        title: cleanTitle,
         description: taskDesc.trim(),
         category: adminTab === 'assignment' ? 'งานวิชาการ' : 'ประกาศทั่วไป',
         dueDate: taskDueDate,
@@ -273,11 +260,29 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
         createdAt: nowIso,
         updatedAt: nowIso,
       };
+      
+      // Save locally immediately so UI responds with zero delay
       onAddTask(newTask);
+
+      // Create folder in Google Drive asynchronously without blocking the UI
+      if (adminTab === 'assignment') {
+        findOrCreateDriveFolder(`[งานวิชาการ] ${cleanTitle}`, GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID)
+          .then((folder) => {
+            if (folder && folder.id) {
+              onUpdateTask({
+                ...newTask,
+                driveFolderId: folder.id,
+                driveFolderUrl: folder.webViewLink,
+              });
+            }
+          })
+          .catch((err) => console.warn('Background folder creation deferred:', err));
+      }
+
       showSuccessAlert(
         adminTab === 'assignment' ? 'มอบหมายงานวิชาการสำเร็จ!' : 'สร้างประกาศสำเร็จ!',
         adminTab === 'assignment'
-          ? `ระบบสร้างโฟลเดอร์ Google Drive สำหรับรวบรวมไฟล์งานนี้เรียบร้อยแล้ว`
+          ? `ระบบได้บันทึกการมอบหมายงานและเตรียมโฟลเดอร์ Google Drive เรียบร้อยแล้ว`
           : `ประกาศถูกเพิ่มเข้าสู่ระบบเรียบร้อยแล้ว`
       );
     }
