@@ -1,4 +1,5 @@
 // Google Drive Integration & Google Apps Script (GAS) Bridge Utility
+import { compressImage } from './storage';
 
 export const GOOGLE_DRIVE_CONFIG = {
   ROOT_FOLDER_ID: '1x4aph_PPHyhtmno5v7XeGJm2IW6WpnaE',
@@ -144,26 +145,47 @@ export async function uploadFileToDrive(
   const fileName = file.name;
   const fileType = file.type || 'application/octet-stream';
   const scriptUrl = getStoredScriptUrl();
+  const validFolderId = (folderId && !folderId.includes('_') && folderId.length > 5)
+    ? folderId
+    : GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
 
   // Convert to base64 if needed
   let base64String = '';
   let fileSize = file.size || 1024;
 
   if (file instanceof File || file instanceof Blob) {
-    base64String = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    fileSize = file.size;
+    // If it's an image and larger than 400KB, optimize/compress to make upload super fast
+    if (file.type && file.type.startsWith('image/') && file.size > 400 * 1024) {
+      try {
+        const compressed = await compressImage(file as File, 1920, 1920, 0.85);
+        if (compressed && compressed.length > 100) {
+          base64String = compressed;
+          fileSize = Math.round((compressed.length * 3) / 4);
+        }
+      } catch (err) {
+        console.warn('Image optimization skipped:', err);
+      }
+    }
+
+    if (!base64String) {
+      base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      fileSize = file.size;
+    }
   } else if (typeof file.base64OrBlob === 'string') {
     base64String = file.base64OrBlob;
   }
 
-  // Method 1: Google Apps Script Web App (Most reliable for Google Drive upload)
+  // Method 1: Google Apps Script Web App (Most reliable for Google Drive upload into specific task folder)
   if (scriptUrl && base64String) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+
       const res = await fetch(scriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -172,9 +194,12 @@ export async function uploadFileToDrive(
           fileName,
           fileBase64: base64String,
           mimeType: fileType,
-          folderId: folderId && folderId.startsWith('1x4') ? folderId : GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID,
+          folderId: validFolderId,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -189,7 +214,7 @@ export async function uploadFileToDrive(
         }
       }
     } catch (err) {
-      console.warn('Upload via Google Apps Script failed:', err);
+      console.warn('Upload via Google Apps Script failed/timed out:', err);
     }
   }
 
@@ -207,7 +232,7 @@ export async function uploadFileToDrive(
       const fileBlob = new Blob([ab], { type: fileType });
 
       const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }));
+      form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [validFolderId] })], { type: 'application/json' }));
       form.append('file', fileBlob);
 
       const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size', {
@@ -235,8 +260,8 @@ export async function uploadFileToDrive(
   return {
     id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     name: fileName,
-    webViewLink: `https://drive.google.com/drive/folders/${folderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID}`,
-    webContentLink: `https://drive.google.com/drive/folders/${folderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID}`,
+    webViewLink: `https://drive.google.com/drive/folders/${validFolderId}`,
+    webContentLink: `https://drive.google.com/drive/folders/${validFolderId}`,
     size: fileSize,
   };
 }

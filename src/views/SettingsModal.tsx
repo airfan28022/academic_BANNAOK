@@ -49,8 +49,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [name, setName] = useState(currentUser.name);
   const [schoolName, setSchoolName] = useState(schoolConfig.schoolName);
   const [departmentName, setDepartmentName] = useState(schoolConfig.departmentName || '');
-  const [academicYear, setAcademicYear] = useState(schoolConfig.academicYear || '2569');
-  const [term, setTerm] = useState(schoolConfig.term || '1');
   const [userAvatar, setUserAvatar] = useState(currentUser.avatar || '');
   const [schoolLogo, setSchoolLogo] = useState(schoolConfig.schoolLogo || '');
   const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
@@ -121,16 +119,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     // If admin, update school config
     if (isAdmin) {
       const updatedConfig: SchoolConfig = {
+        ...schoolConfig,
         schoolName: schoolName.trim(),
         schoolLogo: schoolLogo,
-        academicYear: academicYear.trim(),
-        term: term.trim(),
         departmentName: departmentName.trim() || 'กลุ่มบริหารงานวิชาการ',
       };
       onUpdateSchoolConfig(updatedConfig);
     }
 
     showSuccessAlert('บันทึกข้อมูลสำเร็จ!', 'ข้อมูลส่วนตัวและระบบได้รับการบันทึกเรียบร้อยแล้ว');
+    // Close modal and return to webpage immediately
+    onClose();
   };
 
   // Change Password
@@ -163,6 +162,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    // Close modal and return to webpage immediately
+    onClose();
   };
 
   // Member Management actions for Admin
@@ -387,34 +388,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(e) => setSchoolName(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                </div>
-
-                {/* Academic Year & Term */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      ปีการศึกษา
-                    </label>
-                    <input
-                      type="text"
-                      value={academicYear}
-                      onChange={(e) => setAcademicYear(e.target.value)}
-                      placeholder="เช่น 2569"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      ภาคเรียนที่
-                    </label>
-                    <input
-                      type="text"
-                      value={term}
-                      onChange={(e) => setTerm(e.target.value)}
-                      placeholder="เช่น 1"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
                 </div>
 
                 {/* Department Name */}

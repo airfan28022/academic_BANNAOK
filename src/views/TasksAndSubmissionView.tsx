@@ -164,14 +164,15 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
     }
   };
 
-  // ADMIN: Multi-File Upload for attachments
+  // ADMIN: Multi-File Upload for attachments (High Speed Parallel)
   const handleAdminFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newAttachments: TaskAttachment[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const fileList = Array.from(files);
+    showToast('info', `กำลังอัปโหลดไฟล์แนบ ${fileList.length} ไฟล์...`);
+
+    const uploadPromises = fileList.map(async (file, i) => {
       try {
         const dataUrl = await readFileAsDataURL(file);
         
@@ -183,7 +184,7 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
           size: file.size,
         }, GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
 
-        newAttachments.push({
+        return {
           id: driveResult.id || `att_${Date.now()}_${i}`,
           name: file.name,
           size: file.size,
@@ -192,14 +193,20 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
           driveFileId: driveResult.id,
           driveViewUrl: driveResult.webViewLink,
           uploadTime: new Date().toISOString(),
-        });
+        } as TaskAttachment;
       } catch (err) {
         console.error('File read/upload error:', err);
+        return null;
       }
-    }
+    });
+
+    const results = await Promise.all(uploadPromises);
+    const newAttachments = results.filter((att): att is TaskAttachment => att !== null);
 
     setAdminAttachments((prev) => [...prev, ...newAttachments]);
-    showToast('success', `อัปโหลด ${newAttachments.length} ไฟล์แนบสำเร็จ`);
+    if (newAttachments.length > 0) {
+      showToast('success', `อัปโหลด ${newAttachments.length} ไฟล์แนบสำเร็จ`);
+    }
     if (adminFileInputRef.current) adminFileInputRef.current.value = '';
   };
 
@@ -214,7 +221,7 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
 
     const nowIso = new Date().toISOString();
 
-    // Find or create Drive Folder for assignment
+    // Find or create dedicated Drive Folder for assignment
     let driveFolderId = GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
     let driveFolderUrl = getDriveFolderUrl(GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID);
 
@@ -270,7 +277,7 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
       showSuccessAlert(
         adminTab === 'assignment' ? 'มอบหมายงานวิชาการสำเร็จ!' : 'สร้างประกาศสำเร็จ!',
         adminTab === 'assignment'
-          ? `ระบบสร้างโฟลเดอร์ Google Drive สำหรับรวบรวมไฟล์งานเรียบร้อยแล้ว`
+          ? `ระบบสร้างโฟลเดอร์ Google Drive สำหรับรวบรวมไฟล์งานนี้เรียบร้อยแล้ว`
           : `ประกาศถูกเพิ่มเข้าสู่ระบบเรียบร้อยแล้ว`
       );
     }
@@ -293,32 +300,54 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
     }
   };
 
-  // MEMBER: Multi-file Upload
+  // MEMBER: Multi-file Upload (High Speed & Direct to Assigned Task's Drive Folder)
   const handleMemberFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const fileList = Array.from(files);
     setIsUploading(true);
-    const newFiles: SubmissionFile[] = [];
 
     const currentTask = tasks.find((t) => t.id === selectedTaskId);
-    const targetFolderId = currentTask?.driveFolderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
+    let targetFolderId = currentTask?.driveFolderId;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    // Ensure the folder exists on Google Drive for this task
+    if ((!targetFolderId || targetFolderId.includes('_') || targetFolderId === GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID) && currentTask) {
+      try {
+        const folder = await findOrCreateDriveFolder(
+          `[งานวิชาการ] ${currentTask.title.trim()}`,
+          GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID
+        );
+        targetFolderId = folder.id;
+        const updatedTask: Task = {
+          ...currentTask,
+          driveFolderId: folder.id,
+          driveFolderUrl: folder.webViewLink,
+        };
+        onUpdateTask(updatedTask);
+      } catch (err) {
+        console.warn('Auto-create task folder fallback:', err);
+      }
+    }
+
+    const uploadFolderId = targetFolderId || GOOGLE_DRIVE_CONFIG.ROOT_FOLDER_ID;
+    showToast('info', `กำลังอัปโหลด ${fileList.length} ไฟล์ไปยัง Google Drive...`);
+
+    // Concurrent parallel uploads for maximum speed
+    const uploadPromises = fileList.map(async (file, idx) => {
       try {
         const dataUrl = await readFileAsDataURL(file);
 
-        // Upload to Google Drive
+        // Upload to Google Drive directly into the task's folder
         const driveResult = await uploadFileToDrive({
           name: file.name,
           type: file.type || 'application/octet-stream',
           base64OrBlob: dataUrl,
           size: file.size,
-        }, targetFolderId);
+        }, uploadFolderId);
 
-        newFiles.push({
-          id: driveResult.id || `subf_${Date.now()}_${i}`,
+        return {
+          id: driveResult.id || `subf_${Date.now()}_${idx}`,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
@@ -326,15 +355,25 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
           driveFileId: driveResult.id,
           driveViewUrl: driveResult.webViewLink,
           uploadTime: new Date().toISOString(),
-        });
+        } as SubmissionFile;
       } catch (err) {
         console.error('File read/upload error:', err);
+        return null;
       }
+    });
+
+    const results = await Promise.all(uploadPromises);
+    const validFiles = results.filter((f): f is SubmissionFile => f !== null);
+
+    setUploadedFiles((prev) => [...prev, ...validFiles]);
+    setIsUploading(false);
+    
+    if (validFiles.length > 0) {
+      showToast('success', `อัปโหลด ${validFiles.length} ไฟล์เข้าโฟลเดอร์เรียบร้อยแล้ว`);
+    } else {
+      showErrorAlert('อัปโหลดไม่สำเร็จ', 'ไม่สามารถอัปโหลดไฟล์ได้ กรุณาลองใหม่อีกครั้ง');
     }
 
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
-    setIsUploading(false);
-    showToast('success', `อัปโหลด ${newFiles.length} ไฟล์เรียบร้อยแล้ว`);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

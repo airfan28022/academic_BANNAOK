@@ -117,46 +117,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Welcome Banner */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm">
-              <Sparkles className="w-3.5 h-3.5" /> ระบบบริหารจัดการงานวิชาการ {schoolConfig.academicYear}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              ยินดีต้อนรับ, {currentUser.name}
-            </h2>
-            <p className="text-xs sm:text-sm text-purple-100 font-normal max-w-xl">
-              {isAdmin
-                ? 'ติดตามการมอบหมายงาน ตรวจสอบการส่งงานของครู และจัดการเอกสารทางวิชาการอย่างมีประสิทธิภาพ'
-                : 'ตรวจสอบรายการงานวิชาการที่ได้รับมอบหมาย วันกำหนดส่ง และส่งงานพร้อมไฟล์แนบได้สะดวกรวดเร็ว'}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isAdmin ? (
-              <button
-                id="dash-quick-assign-btn"
-                onClick={() => onNavigateToSubmit()}
-                className="px-4 py-2.5 rounded-xl bg-white text-purple-700 font-bold text-xs shadow-md hover:bg-purple-50 transition-all flex items-center gap-2 whitespace-nowrap btn-glow-purple"
-              >
-                <Send className="w-4 h-4" /> มอบหมายงานใหม่
-              </button>
-            ) : (
-              <button
-                id="dash-quick-submit-btn"
-                onClick={() => onNavigateToSubmit()}
-                className="px-4 py-2.5 rounded-xl bg-white text-purple-700 font-bold text-xs shadow-md hover:bg-purple-50 transition-all flex items-center gap-2 whitespace-nowrap btn-glow-purple"
-              >
-                <Send className="w-4 h-4" /> ส่งงานวิชาการ
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Announcements Carousel (1 Announcement with Right-side controls - Filtered for next 7 days only) */}
       {upcomingAnnouncements.length > 0 && currentAnnouncement && (
         <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50/50 border border-amber-200/90 shadow-xs relative overflow-hidden">
