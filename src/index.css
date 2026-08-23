@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    font-family: 'Prompt', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+/* Custom glow effects for CTA buttons */
+.btn-glow-purple {
+  box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-glow-purple:hover {
+  box-shadow: 0 6px 22px 0 rgba(124, 58, 237, 0.55);
+  transform: translateY(-1px);
+}
+
+.btn-glow-emerald {
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-glow-emerald:hover {
+  box-shadow: 0 6px 22px 0 rgba(16, 185, 129, 0.55);
+  transform: translateY(-1px);
+}
+
+.btn-glow-amber {
+  box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-glow-amber:hover {
+  box-shadow: 0 6px 22px 0 rgba(245, 158, 11, 0.55);
+  transform: translateY(-1px);
+}
+
+/* Card hover animation */
+.card-hover-effect {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-hover-effect:hover {
+  transform: translateY(-2px) scale(1.006);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* Image zoom effect */
+.img-hover-zoom {
+  overflow: hidden;
+}
+.img-hover-zoom img {
+  transition: transform 0.35s ease, filter 0.35s ease;
+}
+.img-hover-zoom:hover img {
+  transform: scale(1.06);
+  filter: brightness(1.03);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+

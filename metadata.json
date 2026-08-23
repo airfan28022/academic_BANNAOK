@@ -1,0 +1,6 @@
+{
+  "name": "ระบบบริหารจัดการงานวิชาการ มอบหมายงานและส่งงาน",
+  "description": "ระบบบริหารจัดการงานวิชาการ มอบหมายงาน ส่งงาน ติดตามสถานะ และศูนย์เอกสารสำหรับโรงเรียนและสถานศึกษา",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
