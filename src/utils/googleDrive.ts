@@ -160,10 +160,10 @@ export async function uploadFileToDrive(
   let fileSize = file.size || 1024;
 
   if (file instanceof File || file instanceof Blob) {
-    // If it's an image and larger than 400KB, optimize/compress to make upload super fast
-    if (file.type && file.type.startsWith('image/') && file.size > 400 * 1024) {
+    // If it's an image and larger than 300KB, optimize/compress to make upload super fast
+    if (file.type && file.type.startsWith('image/') && file.size > 300 * 1024) {
       try {
-        const compressed = await compressImage(file as File, 1920, 1920, 0.85);
+        const compressed = await compressImage(file as File, 1440, 1440, 0.82);
         if (compressed && compressed.length > 100) {
           base64String = compressed;
           fileSize = Math.round((compressed.length * 3) / 4);
@@ -190,7 +190,7 @@ export async function uploadFileToDrive(
   if (scriptUrl && base64String) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s fast timeout to prevent freezing
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s fast timeout to prevent freezing
 
       const res = await fetch(scriptUrl, {
         method: 'POST',

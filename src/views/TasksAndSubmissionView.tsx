@@ -22,6 +22,7 @@ import {
   Download,
   Check,
   Megaphone,
+  Loader2,
 } from 'lucide-react';
 
 interface TasksAndSubmissionViewProps {
@@ -77,6 +78,7 @@ export const TasksAndSubmissionView: React.FC<TasksAndSubmissionViewProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<SubmissionFile[]>([]);
   const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isAdminUploading, setIsAdminUploading] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const assignmentTasks = tasks.filter((t) => t.type === 'assignment');
