@@ -60,9 +60,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight line-clamp-1">
                     {schoolConfig.schoolName}
                   </h1>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 text-xs font-medium rounded-md bg-purple-50 text-purple-700 border border-purple-200">
-                    ปีการศึกษา {schoolConfig.academicYear} / เทอม {schoolConfig.term}
-                  </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
                   {schoolConfig.departmentName} &bull; วันนี้ {formatThaiDate(todayStr, true)}

@@ -255,31 +255,6 @@ export const TrackingAndGradingView: React.FC<TrackingAndGradingViewProps> = ({
                         {task.description}
                       </p>
                     )}
-
-                    {/* Google Drive Link for Admin - Minimal Aesthetic Button */}
-                    {isAdmin && (
-                      <div className="pt-2 flex items-center gap-2">
-                        <a
-                          href={task.driveFolderUrl || getDriveFolderUrl(task.driveFolderId)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:text-purple-700 hover:bg-purple-50/80 border border-slate-200/90 shadow-xs hover:border-purple-200 transition-all group"
-                          title="เปิดโฟลเดอร์รวบรวมไฟล์งานใน Google Drive"
-                        >
-                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" viewBox="0 0 87.3 78" fill="currentColor">
-                            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                            <path d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44C.4 49.9 0 51.45 0 53h27.5z" fill="#00ac47"/>
-                            <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
-                            <path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.95 0H34.35c-1.55 0-3.1.4-4.45 1.2z" fill="#00832d"/>
-                            <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.45 1.2h50.9c1.55 0 3.1-.4 4.45-1.2z" fill="#26842a"/>
-                            <path d="m73.55 25-13.75-23.8c-1.35-.8-2.9-1.2-4.45-1.2h-.1l13.75 23.8 14.7 25.45c.8-1.4 1.2-2.95 1.2-4.5 0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-                          </svg>
-                          <span>Google Drive โฟลเดอร์งาน</span>
-                          <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-purple-600" />
-                        </a>
-                      </div>
-                    )}
                   </div>
 
                   {/* Right: Progress & Toggle Icon */}
