@@ -14,9 +14,10 @@ import {
   getStoredCurrentUser,
   saveCurrentUser,
 } from './utils/storage';
-import { showSuccessAlert, showConfirmDialog, showToast } from './utils/alerts';
+import { showConfirmDialog, showToast } from './utils/alerts';
 import { Navbar } from './components/Navbar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
+import { BottomNav } from './components/BottomNav';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { LoginRegisterView } from './views/LoginRegisterView';
 import { DashboardView } from './views/DashboardView';
@@ -36,7 +37,6 @@ export default function App() {
 
   // UI Navigation & Modals
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedTaskForModal, setSelectedTaskForModal] = useState<Task | null>(null);
   const [preSelectedTaskForNav, setPreSelectedTaskForNav] = useState<Task | null>(null);
@@ -102,7 +102,6 @@ export default function App() {
 
   const handleDeleteTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    // Also remove associated submissions
     setSubmissions((prev) => prev.filter((s) => s.taskId !== taskId));
   };
 
@@ -168,11 +167,13 @@ export default function App() {
   const handleNavigateToSubmit = (task?: Task) => {
     setPreSelectedTaskForNav(task || null);
     setActiveTab('tasks');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigateToGrading = (task?: Task) => {
     setPreSelectedTaskForNav(task || null);
     setActiveTab('tracking');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // If not authenticated, render Login & Register View
@@ -195,95 +196,109 @@ export default function App() {
   const pendingSubmissionsCount = submissions.filter((s) => s.status === 'submitted').length;
   const pendingUsersCount = users.filter((u) => u.status === 'pending').length;
 
+  const badgeCounts = {
+    pendingTasks: pendingTasksCount,
+    pendingSubmissions: pendingSubmissionsCount,
+    documentsCount: documents.length,
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-purple-500 selection:text-white">
+    <div className="min-h-screen bg-[#faf8fc] text-slate-800 flex flex-col selection:bg-purple-600 selection:text-white">
       
-      {/* Top Navigation Bar with Small Settings & Logout at Top-Right */}
+      {/* Top Navbar */}
       <Navbar
         currentUser={currentUser}
         schoolConfig={schoolConfig}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onLogout={handleLogout}
-        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         pendingCount={pendingUsersCount}
       />
 
-      {/* Main Layout: Left Sidebar + Content Canvas */}
-      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 flex-1 flex flex-col lg:flex-row gap-6 py-6">
+      {/* Main Responsive Layout: Desktop with Sidebar, Mobile with BottomNav */}
+      <div className="max-w-7xl w-full mx-auto flex-1 flex flex-row">
         
-        {/* Left Sidebar (Big prominent buttons on single lines) */}
+        {/* Left Sidebar (Visible on Desktop / Tablets md:flex) */}
         <Sidebar
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setActiveTab(tab);
             setPreSelectedTaskForNav(null);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           currentUser={currentUser}
-          isMobileOpen={isMobileMenuOpen}
-          onCloseMobile={() => setIsMobileMenuOpen(false)}
-          badgeCounts={{
-            pendingTasks: pendingTasksCount,
-            pendingSubmissions: pendingSubmissionsCount,
-            documentsCount: documents.length,
-          }}
+          badgeCounts={badgeCounts}
         />
 
-        {/* Dynamic Content View Canvas */}
-        <main className="flex-1 min-w-0">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              currentUser={currentUser}
-              tasks={tasks}
-              submissions={submissions}
-              allUsers={users}
-              schoolConfig={schoolConfig}
-              onSelectTask={(task) => setSelectedTaskForModal(task)}
-              onNavigateToSubmit={handleNavigateToSubmit}
-              onNavigateToGrading={handleNavigateToGrading}
-            />
-          )}
+        {/* Main Content View (Padded bottom on mobile for BottomNav) */}
+        <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-8">
+          <div className="max-w-5xl mx-auto">
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                currentUser={currentUser}
+                tasks={tasks}
+                submissions={submissions}
+                allUsers={users}
+                schoolConfig={schoolConfig}
+                onSelectTask={(task) => setSelectedTaskForModal(task)}
+                onNavigateToSubmit={handleNavigateToSubmit}
+                onNavigateToGrading={handleNavigateToGrading}
+              />
+            )}
 
-          {activeTab === 'tasks' && (
-            <TasksAndSubmissionView
-              currentUser={currentUser}
-              tasks={tasks}
-              submissions={submissions}
-              onAddTask={handleAddTask}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onSubmitWork={handleSubmitWork}
-              onUpdateSubmission={handleUpdateSubmission}
-              onDeleteSubmission={handleDeleteSubmission}
-              preSelectedTask={preSelectedTaskForNav}
-            />
-          )}
+            {activeTab === 'tasks' && (
+              <TasksAndSubmissionView
+                currentUser={currentUser}
+                tasks={tasks}
+                submissions={submissions}
+                onAddTask={handleAddTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                onSubmitWork={handleSubmitWork}
+                onUpdateSubmission={handleUpdateSubmission}
+                onDeleteSubmission={handleDeleteSubmission}
+                preSelectedTask={preSelectedTaskForNav}
+              />
+            )}
 
-          {activeTab === 'tracking' && (
-            <TrackingAndGradingView
-              currentUser={currentUser}
-              tasks={tasks}
-              submissions={submissions}
-              allUsers={users}
-              onUpdateSubmission={handleUpdateSubmission}
-              onDeleteSubmission={handleDeleteSubmission}
-              preSelectedTask={preSelectedTaskForNav}
-            />
-          )}
+            {activeTab === 'tracking' && (
+              <TrackingAndGradingView
+                currentUser={currentUser}
+                tasks={tasks}
+                submissions={submissions}
+                allUsers={users}
+                onUpdateSubmission={handleUpdateSubmission}
+                onDeleteSubmission={handleDeleteSubmission}
+                preSelectedTask={preSelectedTaskForNav}
+              />
+            )}
 
-          {activeTab === 'documents' && (
-            <DocumentCenterView
-              currentUser={currentUser}
-              documents={documents}
-              onAddDocument={handleAddDocument}
-              onUpdateDocument={handleUpdateDocument}
-              onDeleteDocument={handleDeleteDocument}
-            />
-          )}
+            {activeTab === 'documents' && (
+              <DocumentCenterView
+                currentUser={currentUser}
+                documents={documents}
+                onAddDocument={handleAddDocument}
+                onUpdateDocument={handleUpdateDocument}
+                onDeleteDocument={handleDeleteDocument}
+              />
+            )}
+          </div>
         </main>
 
       </div>
 
-      {/* Task Detail Modal (Opened from Calendar or Dashboard) */}
+      {/* Fixed Bottom Navigation (Visible ONLY on Mobile md:hidden, always visible on scroll) */}
+      <BottomNav
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          setPreSelectedTaskForNav(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        currentUser={currentUser}
+        badgeCounts={badgeCounts}
+      />
+
+      {/* Task Detail Modal */}
       <TaskDetailModal
         task={selectedTaskForModal}
         onClose={() => setSelectedTaskForModal(null)}
@@ -294,7 +309,7 @@ export default function App() {
         onGoToGrading={handleNavigateToGrading}
       />
 
-      {/* Settings Modal (Top-right small button action) */}
+      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -307,18 +322,6 @@ export default function App() {
         onRejectUser={handleRejectUser}
         onDeleteUser={handleDeleteUser}
       />
-
-      {/* Modern Clean Footer */}
-      <footer className="mt-auto border-t border-slate-200/80 bg-white/70 py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            &copy; {new Date().getFullYear()} {schoolConfig.schoolName} &bull; ระบบบริหารจัดการงานวิชาการ
-          </span>
-          <span className="text-[11px] text-slate-400">
-            Performance Optimized &bull; รองรับการใช้งานมือถือ แท็บเล็ต และคอมพิวเตอร์
-          </span>
-        </div>
-      </footer>
 
     </div>
   );

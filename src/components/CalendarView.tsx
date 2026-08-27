@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Task, Submission, User } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 
 interface CalendarViewProps {
   tasks: Task[];
@@ -97,22 +97,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return {
           task,
           color: 'yellow' as const,
-          statusText: 'ประกาศ/กิจกรรม',
+          statusText: 'ประกาศ',
         };
       }
 
       // If assignment:
       if (isAdmin) {
-        // Admin logic: count submissions for this task
         const taskSubs = submissions.filter((s) => s.taskId === task.id);
         const isAllSubmitted = approvedMembersCount > 0 && taskSubs.length >= approvedMembersCount;
         return {
           task,
           color: (isAllSubmitted ? 'green' : 'red') as 'green' | 'red',
-          statusText: isAllSubmitted ? `ส่งครบแล้ว (${taskSubs.length}/${approvedMembersCount})` : `ส่งแล้ว ${taskSubs.length}/${approvedMembersCount}`,
+          statusText: isAllSubmitted ? `ส่งครบ (${taskSubs.length})` : `ส่ง ${taskSubs.length}/${approvedMembersCount}`,
         };
       } else {
-        // Member logic: check if current user submitted this task
         const mySub = submissions.find(
           (s) => s.taskId === task.id && s.userId === currentUser.id
         );
@@ -120,7 +118,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return {
           task,
           color: (hasSubmitted ? 'green' : 'red') as 'green' | 'red',
-          statusText: hasSubmitted ? 'ส่งงานแล้ว' : 'ยังไม่ได้ส่ง',
+          statusText: hasSubmitted ? 'ส่งแล้ว' : 'ยังไม่ส่ง',
         };
       }
     });
@@ -151,44 +149,43 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-4 sm:p-6 card-hover-effect">
+    <div className="bg-white rounded-2xl border border-purple-100 p-3.5 sm:p-5 shadow-xs">
       {/* Calendar Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center">
-            <CalendarIcon className="w-5 h-5" />
+      <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-purple-50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+            <CalendarIcon className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <h3 className="text-sm sm:text-base font-bold text-purple-950 flex items-center gap-1.5 leading-tight">
               <span>{thaiMonths[month]}</span>
-              <span>{year + 543}</span>
+              <span className="text-purple-600/80 font-semibold">{year + 543}</span>
             </h3>
-            <p className="text-xs text-slate-500">
-              ปฏิทินแสดงกำหนดการส่งงานและประกาศวิชาการ (dd/mm/yyyy)
-            </p>
           </div>
         </div>
 
         {/* Navigation buttons */}
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={goToToday}
-            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-colors"
+            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-purple-100/70 text-purple-800 border border-purple-200 hover:bg-purple-200 transition-colors"
           >
             วันนี้
           </button>
-          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+          <div className="flex items-center border border-purple-200 rounded-lg overflow-hidden bg-white shadow-xs">
             <button
               onClick={prevMonth}
-              className="p-2 text-slate-600 hover:bg-slate-100 hover:text-purple-600 transition-colors"
+              className="p-1.5 text-purple-800 hover:bg-purple-50 hover:text-purple-900 transition-colors"
               title="เดือนก่อนหน้า"
+              aria-label="เดือนก่อนหน้า"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={nextMonth}
-              className="p-2 text-slate-600 hover:bg-slate-100 hover:text-purple-600 transition-colors"
+              className="p-1.5 text-purple-800 hover:bg-purple-50 hover:text-purple-900 transition-colors"
               title="เดือนถัดไป"
+              aria-label="เดือนถัดไป"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -196,37 +193,31 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Color Legend */}
-      <div className="flex flex-wrap items-center gap-3 sm:gap-6 mb-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs">
+      {/* Color Legend - Minimalist & Compact */}
+      <div className="flex items-center justify-between gap-2 mb-2.5 px-3 py-1.5 rounded-xl bg-purple-50/50 border border-purple-100 text-[10px] sm:text-[11px]">
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-rose-500 ring-2 ring-rose-200 inline-block"></span>
-          <span className="text-slate-700 font-medium">
-            {isAdmin ? 'สีแดง = งานมอบหมาย (ยังส่งไม่ครบ)' : 'สีแดง = มีงานต้องส่ง / ยังไม่ส่ง'}
-          </span>
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+          <span className="text-slate-700 font-medium">{isAdmin ? 'ยังไม่ครบ' : 'ยังไม่ส่ง'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-emerald-200 inline-block"></span>
-          <span className="text-slate-700 font-medium">
-            {isAdmin ? 'สีเขียว = ส่งครบทุกคนแล้ว' : 'สีเขียว = ส่งงานแล้ว'}
-          </span>
+          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block"></span>
+          <span className="text-purple-900 font-bold">{isAdmin ? 'ส่งครบ' : 'ส่งแล้ว'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-200 inline-block"></span>
-          <span className="text-slate-700 font-medium">
-            สีเหลือง = ประกาศแจ้งเพื่อทราบ
-          </span>
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+          <span className="text-slate-700 font-medium">ประกาศ</span>
         </div>
       </div>
 
       {/* Days of week header */}
-      <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+      <div className="grid grid-cols-7 gap-1 mb-1 text-center">
         {thaiDays.map((d, index) => (
           <div
             key={d}
-            className={`py-2 text-xs font-semibold rounded-xl ${
+            className={`py-1 text-[11px] font-bold rounded-lg ${
               index === 0 || index === 6
-                ? 'text-rose-500 bg-rose-50/50'
-                : 'text-slate-600 bg-slate-100/60'
+                ? 'text-purple-900/60 bg-purple-50/70'
+                : 'text-purple-950 bg-purple-50/40'
             }`}
           >
             {d}
@@ -235,90 +226,64 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 sm:gap-2">
+      <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((cell, idx) => (
           <div
             key={idx}
-            className={`min-h-[88px] sm:min-h-[105px] p-1.5 sm:p-2 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
+            className={`min-h-[64px] sm:min-h-[78px] p-1 rounded-xl border transition-all duration-150 flex flex-col justify-between ${
               cell.isCurrentMonth
                 ? cell.isToday
-                  ? 'bg-purple-50/40 border-purple-300 shadow-xs ring-1 ring-purple-200'
-                  : 'bg-white border-slate-200/70 hover:border-purple-200 hover:bg-slate-50/50'
-                : 'bg-slate-50/40 border-transparent text-slate-300 opacity-60'
+                  ? 'bg-purple-100/50 border-purple-400 shadow-xs ring-1 ring-purple-300'
+                  : 'bg-white border-purple-100/70 hover:border-purple-300'
+                : 'bg-purple-50/20 border-transparent text-purple-200 opacity-40'
             }`}
           >
             {/* Date Number Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between leading-none">
               <span
-                className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+                className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center ${
                   cell.isToday
                     ? 'bg-purple-600 text-white shadow-xs'
                     : cell.isCurrentMonth
                     ? 'text-slate-700'
-                    : 'text-slate-300'
+                    : 'text-purple-300'
                 }`}
               >
                 {cell.dayNumber}
               </span>
-              {cell.items.length > 0 && (
-                <span className="text-[10px] font-bold text-slate-400">
-                  {cell.items.length} รายการ
-                </span>
-              )}
             </div>
 
             {/* Task / Announcement Items on this day */}
-            <div className="space-y-1 my-1 overflow-y-auto max-h-[70px]">
+            <div className="space-y-0.5 my-0.5 overflow-y-auto max-h-[50px]">
               {cell.items.map((item, itemIdx) => {
                 const isRed = item.color === 'red';
                 const isGreen = item.color === 'green';
-                const isYellow = item.color === 'yellow';
 
                 return (
                   <button
                     key={itemIdx}
                     onClick={() => onSelectTask(item.task)}
-                    className={`w-full text-left p-1 sm:p-1.5 rounded-lg text-[10px] sm:text-[11px] font-medium leading-tight border transition-transform hover:scale-102 flex flex-col gap-0.5 ${
+                    className={`w-full text-left p-0.5 sm:p-1 rounded text-[9px] sm:text-[10px] font-medium leading-tight border truncate block transition-transform active:scale-95 ${
                       isRed
                         ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                         : isGreen
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                        : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                        ? 'bg-purple-600 text-white border-purple-700 hover:bg-purple-700'
+                        : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
                     }`}
+                    title={`${item.task.title} (${item.statusText})`}
                   >
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                          isRed
-                            ? 'bg-rose-500'
-                            : isGreen
-                            ? 'bg-emerald-500'
-                            : 'bg-amber-500'
-                        }`}
-                      />
-                      <span className="font-semibold truncate w-full">
-                        {item.task.title}
-                      </span>
-                    </div>
-                    <span className="text-[9px] opacity-80 pl-2.5 truncate">
-                      {item.statusText}
+                    <span className="truncate block font-semibold">
+                      {item.task.title}
                     </span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Bottom info indicator for empty days */}
-            {cell.items.length === 0 && cell.isCurrentMonth && (
-              <div className="h-2"></div>
-            )}
+            {/* Empty space filler */}
+            {cell.items.length === 0 && <div className="h-1" />}
           </div>
         ))}
-      </div>
-
-      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-        <Info className="w-3.5 h-3.5" />
-        <span>คลิกที่หัวข้องานหรือประกาศบนปฏิทินเพื่อดูรายละเอียดและส่งงาน</span>
       </div>
     </div>
   );
